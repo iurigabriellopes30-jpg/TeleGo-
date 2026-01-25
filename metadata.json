@@ -1,0 +1,9 @@
+
+{
+  "name": "TeleGo! - Logística Express",
+  "description": "Plataforma de logística expressa para restaurantes e motoboys.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

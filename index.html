@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeleGo! - Logística Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS - Mais compatível com sandboxes -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { 
+          font-family: 'Plus Jakarta Sans', sans-serif; 
+          overscroll-behavior-y: contain;
+        }
+        .glass-card {
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .gradient-primary {
+          background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
+        }
+        @keyframes pulse-glow {
+          0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); border-color: rgba(79, 70, 229, 0.2); }
+          50% { box-shadow: 0 0 20px 4px rgba(79, 70, 229, 0.2); border-color: rgba(79, 70, 229, 0.5); }
+          100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); border-color: rgba(79, 70, 229, 0.2); }
+        }
+        .animate-pulse-glow {
+          animation: pulse-glow 2s infinite ease-in-out;
+        }
+        .animate-shake {
+          animation: shake 0.3s ease-in-out;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Ajustes Leaflet para visual premium */
+        .leaflet-container {
+          background: #f1f5f9 !important;
+        }
+        .leaflet-control-attribution {
+          display: none !important;
+        }
+        .leaflet-bar {
+          border: none !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        }
+        .leaflet-bar a {
+          background-color: white !important;
+          color: #4F46E5 !important;
+          border-bottom: 1px solid #f1f5f9 !important;
+        }
+
+        /* Marcadores Customizados com Transição Suave */
+        .marker-courier {
+          width: 24px;
+          height: 24px;
+          background: #4F46E5;
+          border: 4px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .marker-point {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[#F8FAFC] text-slate-900">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
