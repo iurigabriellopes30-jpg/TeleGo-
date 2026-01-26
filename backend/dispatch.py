@@ -1,21 +1,25 @@
 
 import asyncio
 import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from geopy.distance import geodesic
-from . import models, schemas
+from . import models
 from .db import SessionLocal
 
 # This is a simplified in-memory store for pending offers and events.
 # In a real-world application, you'd use a more robust solution like Redis.
-pending_offers = {}
 courier_responses = {}
 
-def find_nearby_couriers(db: Session, lat: float, lng: float, radius_km: int):
-    """
-    Finds available couriers within a given radius, ordered by distance.
-    """
-    couriers = db.query(models.Courier).filter(models.Courier.available == 1).all()
+async def get_available_couriers(db: AsyncSession):
+    """Fetches all available couriers from the database."""
+    stmt = select(models.Courier).where(models.Courier.available == 1)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+def filter_couriers_by_distance(couriers, lat, lng, radius_km):
+    """Filters a list of couriers by their distance to a point."""
     nearby_couriers = []
     for courier in couriers:
         distance = geodesic((lat, lng), (courier.lat, courier.lng)).kilometers
@@ -25,24 +29,31 @@ def find_nearby_couriers(db: Session, lat: float, lng: float, radius_km: int):
     nearby_couriers.sort(key=lambda x: x[1])
     return [courier for courier, distance in nearby_couriers]
 
-async def dispatch_order(order_id: int):
+async def dispatch_order(order_id: int, session_local=None):
     """
     Manages the sequential dispatch of an order to nearby couriers.
-    This function now creates its own database session.
+    Accepts an optional session_local for testing purposes.
     """
-    db = SessionLocal()
-    try:
-        order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    use_session = session_local or SessionLocal
+    async with use_session() as db:
+        stmt = select(models.Order).where(models.Order.id == order_id).options(selectinload(models.Order.restaurant))
+        result = await db.execute(stmt)
+        order = result.scalars().first()
+
         if not order or order.status != "SEARCHING":
             return
 
         restaurant = order.restaurant
-        radii = [1, 2, 3, 5, 10]
 
+        # Fetch all couriers once
+        all_couriers = await get_available_couriers(db)
+
+        radii = [1, 2, 3, 5, 10]
         tried_couriers = set()
 
         for radius in radii:
-            nearby_couriers = find_nearby_couriers(db, restaurant.lat, restaurant.lng, radius)
+            # Filter couriers in memory to avoid sync I/O in the DB transaction
+            nearby_couriers = filter_couriers_by_distance(all_couriers, restaurant.lat, restaurant.lng, radius)
 
             for courier in nearby_couriers:
                 if courier.id in tried_couriers:
@@ -53,28 +64,22 @@ async def dispatch_order(order_id: int):
                 order.current_candidate_courier_id = courier.id
                 order.offer_sent_at = datetime.datetime.now(datetime.UTC)
                 order.attempt_count += 1
-                db.commit()
+                await db.commit()
 
                 try:
-                    # Wait for an event (response) for up to 20 seconds
                     response_event = asyncio.Event()
                     courier_responses[order.id] = response_event
                     await asyncio.wait_for(response_event.wait(), timeout=20.0)
                 except asyncio.TimeoutError:
-                    # No response, continue to the next courier
                     order.current_candidate_courier_id = None
-                    db.commit()
+                    await db.commit()
                     continue
                 finally:
                     courier_responses.pop(order.id, None)
 
-                # Re-fetch order to check if it was accepted
-                db.refresh(order)
+                await db.refresh(order)
                 if order.status == "ASSIGNED":
                     return
 
-        # If loop finishes, no courier was found
         order.status = "NO_COURIER_FOUND"
-        db.commit()
-    finally:
-        db.close()
+        await db.commit()
