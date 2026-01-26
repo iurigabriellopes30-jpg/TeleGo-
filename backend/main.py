@@ -1,7 +1,10 @@
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from db import Base, engine
+from routers import auth, couriers, orders, restaurants
 
-from roteadores import auth, users, orders, restaurants, couriers
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TeleGo Backend", version="1.0.0")
 
@@ -16,10 +19,9 @@ app.add_middleware(
 
 # Rotas principais
 app.include_router(auth.router)
-app.include_router(users.router)
+app.include_router(couriers.router)
 app.include_router(orders.router)
 app.include_router(restaurants.router)
-app.include_router(couriers.router)
 
 @app.get("/")
 def root():
