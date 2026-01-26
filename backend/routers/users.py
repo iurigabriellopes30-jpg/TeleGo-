@@ -1,18 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from db import get_db
-from models import User
-from schemas import UserCreate, UserOut
-from routers.auth import get_password_hash
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from .. import models, schemas
+from ..db import get_db
+from ..security import get_password_hash
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-@router.post("/register", response_model=UserOut)
-def register(user: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user.email).first():
+@router.post("/register", response_model=schemas.User)
+async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.User).where(models.User.email == user.email)
+    result = await db.execute(stmt)
+    if result.scalars().first():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
-    db_user = User(email=user.email, hashed_password=get_password_hash(user.password), name=user.name)
+
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(email=user.email, hashed_password=hashed_password, name=user.name)
+
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+
     return db_user
