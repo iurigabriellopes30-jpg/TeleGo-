@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, users, orders, restaurants, couriers
+from roteadores import auth, users, orders, restaurants, couriers
 
 app = FastAPI(title="TeleGo Backend", version="1.0.0")
 
