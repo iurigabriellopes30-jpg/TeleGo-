@@ -7,7 +7,10 @@ from backend.routers import auth, couriers, orders, restaurants
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TeleGo Backend", version="1.0.0")
-
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "TeleGo Backend"}
+    
 # CORS para permitir acesso do frontend
 app.add_middleware(
     CORSMiddleware,
