@@ -17,11 +17,8 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     echo=False,
-    connect_args=(
-        {"check_same_thread": False}
-        if SQLALCHEMY_DATABASE_URL.startswith("sqlite")
-        else {"ssl": True}
-    )
+    connect_args={"ssl": True} if SQLALCHEMY_DATABASE_URL.startswith("postgresql") else {},
+    pool_pre_ping=True,
 )
 
 SessionLocal = async_sessionmaker(
