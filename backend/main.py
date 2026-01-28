@@ -19,7 +19,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://telego-logistica-inteligente.vercel.app"
+        "https://telego-production.up.railway.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

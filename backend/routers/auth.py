@@ -1,13 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from backend import models, schemas
-from backend.db import get_db
-from backend.security import create_access_token, verify_password, get_password_hash, decode_access_token
+
+import logging
+from pydantic import EmailStr, ValidationError
 
 router = APIRouter(tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+
+logger = logging.getLogger("telego.auth")
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     payload = decode_access_token(token)
@@ -23,33 +21,51 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
 
 @router.post("/register", response_model=schemas.Token)
 async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    stmt = select(models.User).where(models.User.email == user_in.email)
-    result = await db.execute(stmt)
-    if result.scalars().first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+    try:
+        # Validação explícita do email
+        try:
+            EmailStr.validate(user_in.email)
+        except ValidationError:
+            logger.warning(f"Tentativa de registro com email inválido: {user_in.email}")
+            raise HTTPException(status_code=400, detail="Email inválido")
 
-    hashed_password = get_password_hash(user_in.password)
-    new_user = models.User(
-        email=user_in.email,
-        hashed_password=hashed_password,
-        name=user_in.name,
-        role=user_in.role
-    )
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
+        stmt = select(models.User).where(models.User.email == user_in.email)
+        result = await db.execute(stmt)
+        if result.scalars().first():
+            logger.info(f"Tentativa de registro com email já cadastrado: {user_in.email}")
+            raise HTTPException(status_code=409, detail="Email já cadastrado")
 
-    if new_user.role == "RESTAURANT":
-        restaurant = models.Restaurant(name=new_user.name, user_id=new_user.id, lat=-23.5505, lng=-46.6333)
-        db.add(restaurant)
-    elif new_user.role == "COURIER":
-        courier = models.Courier(name=new_user.name, email=new_user.email, user_id=new_user.id, lat=-23.5505, lng=-46.6333)
-        db.add(courier)
+        hashed_password = get_password_hash(user_in.password)
+        new_user = models.User(
+            email=user_in.email,
+            hashed_password=hashed_password,
+            name=user_in.name,
+            role=user_in.role
+        )
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
 
-    await db.commit()
+        if new_user.role == "RESTAURANT":
+            restaurant = models.Restaurant(name=new_user.name, user_id=new_user.id, lat=-23.5505, lng=-46.6333)
+            db.add(restaurant)
+        elif new_user.role == "COURIER":
+            courier = models.Courier(name=new_user.name, email=new_user.email, user_id=new_user.id, lat=-23.5505, lng=-46.6333)
+            db.add(courier)
 
-    access_token = create_access_token(data={"sub": new_user.email})
-    return {"access_token": access_token, "token_type": "bearer", "user": new_user}
+        await db.commit()
+
+        access_token = create_access_token(data={"sub": new_user.email})
+        logger.info(f"Usuário registrado com sucesso: {user_in.email} (role={user_in.role})")
+        return {"access_token": access_token, "token_type": "bearer", "user": new_user}
+
+    except HTTPException as e:
+        await db.rollback()
+        raise e
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Erro inesperado no registro de usuário: {str(e)} | email={getattr(user_in, 'email', None)}")
+        raise HTTPException(status_code=500, detail="Erro interno ao registrar usuário")
 
 @router.post("/token", response_model=schemas.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
