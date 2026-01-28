@@ -1,4 +1,10 @@
 import os
+import os
+
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+print("DATABASE_URL RAW =>", repr(SQLALCHEMY_DATABASE_URL))
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
@@ -32,4 +38,4 @@ async def get_db():
     async with SessionLocal() as db:
         yield db
 
-print("DATABASE_URL =>", repr(SQLALCHEMY_DATABASE_URL))
+
