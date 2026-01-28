@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from db import Base, engine
+from backend.db import Base, engine
 from routers import auth, couriers, orders, restaurants
 
 @asynccontextmanager
