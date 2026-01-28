@@ -31,3 +31,5 @@ Base = declarative_base()
 async def get_db():
     async with SessionLocal() as db:
         yield db
+
+print("DATABASE_URL =>", repr(SQLALCHEMY_DATABASE_URL))
