@@ -7,104 +7,122 @@ import { CourierDashboard } from './components/CourierDashboard';
 import { LandingPage } from './components/LandingPage';
 import { HistoryScreen } from './components/HistoryScreen';
 import { ProfileScreen } from './components/ProfileScreen';
-
-const MAX_DELIVERY_TIME = 15 * 60 * 1000; 
-const USERS_DB_KEY = 'telego_users_db';
+import { apiService } from './services/api';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.HOME);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [profileInfo, setProfileInfo] = useState<any>(null);
 
-  const seedTestData = () => {
-    const existingUsers = localStorage.getItem(USERS_DB_KEY);
-    if (!existingUsers) {
-      const testUsers = [
-        { id: 'u_rest_1', name: 'Pizzaria Toscana', email: 'restaurante@teste.com', password: '123', role: UserRole.RESTAURANT, createdAt: Date.now() },
-        { id: 'u_cour_1', name: 'João Entregas', email: 'motoboy@teste.com', password: '123', role: UserRole.COURIER, createdAt: Date.now() }
-      ];
-      localStorage.setItem(USERS_DB_KEY, JSON.stringify(testUsers));
+  const fetchProfile = useCallback(async (token: string) => {
+    try {
+      const data = await apiService.get('/me', token);
+      setProfileInfo(data);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
     }
-  };
-
-  useEffect(() => {
-    seedTestData();
-    const savedSession = localStorage.getItem('telego_session');
-    const savedDeliveries = localStorage.getItem('telego_deliveries');
-    if (savedSession) setSession(JSON.parse(savedSession));
-    if (savedDeliveries) setDeliveries(JSON.parse(savedDeliveries));
-    setIsLoading(false);
   }, []);
 
-  useEffect(() => {
-    const checkExpiration = () => {
-      const now = Date.now();
-      let changed = false;
-      const updatedDeliveries = deliveries.map(d => {
-        if (d.status === DeliveryStatus.PENDING && (now - d.createdAt) > MAX_DELIVERY_TIME) {
-          changed = true;
-          return { ...d, status: DeliveryStatus.EXPIRED };
-        }
-        return d;
-      });
-      if (changed) setDeliveries(updatedDeliveries);
-    };
-    const interval = setInterval(checkExpiration, 10000);
-    return () => clearInterval(interval);
-  }, [deliveries]);
+  const fetchDeliveries = useCallback(async () => {
+    if (!session || !profileInfo) return;
+    try {
+      if (session.user.role === UserRole.RESTAURANT && profileInfo.restaurant_id) {
+        const data = await apiService.get(`/orders/restaurant/${profileInfo.restaurant_id}`, session.token);
+        setDeliveries(data);
+      } else if (session.user.role === UserRole.COURIER && profileInfo.courier_id) {
+        const assigned = await apiService.get(`/orders/courier/${profileInfo.courier_id}`, session.token);
+        const available = await apiService.get(`/orders/available`, session.token);
+        // Evitar duplicatas se houver
+        const all = [...assigned];
+        available.forEach((a: any) => {
+          if (!all.find(d => d.id === a.id)) all.push(a);
+        });
+        setDeliveries(all);
+      }
+    } catch (err) {
+      console.error('Error fetching deliveries:', err);
+    }
+  }, [session, profileInfo]);
 
   useEffect(() => {
-    if (session) localStorage.setItem('telego_session', JSON.stringify(session));
-    else localStorage.removeItem('telego_session');
-    localStorage.setItem('telego_deliveries', JSON.stringify(deliveries));
-  }, [session, deliveries]);
+    const savedSession = localStorage.getItem('telego_session');
+    if (savedSession) {
+      const parsed = JSON.parse(savedSession);
+      setSession(parsed);
+      fetchProfile(parsed.token);
+    }
+    setIsLoading(false);
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (session) {
+      localStorage.setItem('telego_session', JSON.stringify(session));
+      if (!profileInfo) fetchProfile(session.token);
+    } else {
+      localStorage.removeItem('telego_session');
+      setProfileInfo(null);
+    }
+  }, [session, profileInfo, fetchProfile]);
+
+  useEffect(() => {
+    if (session && profileInfo) {
+      fetchDeliveries();
+      const interval = setInterval(fetchDeliveries, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [session, profileInfo, fetchDeliveries]);
 
   const handleUpdateUser = useCallback((updatedUser: User) => {
     setSession(prev => prev ? { ...prev, user: updatedUser } : null);
   }, []);
 
-  const addDelivery = useCallback((newDelivery: Omit<Delivery, 'id' | 'createdAt' | 'status' | 'restaurantId' | 'restaurantName' | 'messages'>) => {
+  const addDelivery = useCallback(async (newDelivery: any) => {
+    if (!session || !profileInfo?.restaurant_id) return;
+    try {
+      await apiService.post('/orders/', {
+        body: { restaurant_id: profileInfo.restaurant_id },
+        token: session.token
+      });
+      fetchDeliveries();
+    } catch (err) {
+      console.error('Error adding delivery:', err);
+    }
+  }, [session, profileInfo, fetchDeliveries]);
+
+  const updateDeliveryStatus = useCallback(async (id: string | number, status: string, courierId?: string | number) => {
     if (!session) return;
-    const delivery: Delivery = {
-      ...newDelivery,
-      id: `order_${Date.now()}`,
-      restaurantId: session.user.id,
-      restaurantName: session.user.name,
-      createdAt: Date.now(),
-      status: DeliveryStatus.PENDING,
-      refusedBy: [],
-      messages: []
-    };
-    setDeliveries(prev => [delivery, ...prev]);
-  }, [session]);
+    try {
+      if (status === DeliveryStatus.ACCEPTED) {
+        await apiService.post(`/orders/${id}/respond?response=true`, { token: session.token });
+      } else {
+        await apiService.put(`/orders/${id}/status?status=${status}`, { token: session.token });
+      }
+      fetchDeliveries();
+    } catch (err) {
+      console.error('Error updating status:', err);
+    }
+  }, [session, fetchDeliveries]);
 
-  const updateDeliveryStatus = useCallback((id: string, status: DeliveryStatus, courierId?: string) => {
-    setDeliveries(prev => prev.map(d => {
-      if (d.id === id && status === DeliveryStatus.ACCEPTED && d.status !== DeliveryStatus.PENDING) return d;
-      return d.id === id ? { ...d, status, courierId: courierId || d.courierId } : d;
-    }));
-  }, []);
-
-  const refuseDelivery = useCallback((deliveryId: string, courierId: string) => {
-    setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, refusedBy: [...(d.refusedBy || []), courierId] } : d));
-  }, []);
-
-  const handleSendMessage = useCallback((deliveryId: string, text: string) => {
+  const refuseDelivery = useCallback(async (deliveryId: string | number) => {
     if (!session) return;
-    const newMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      senderId: session.user.id,
-      senderName: session.user.name,
-      text,
-      timestamp: Date.now()
-    };
-    setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, messages: [...(d.messages || []), newMessage] } : d));
-  }, [session]);
+    try {
+      await apiService.post(`/orders/${deliveryId}/respond?response=false`, { token: session.token });
+      fetchDeliveries();
+    } catch (err) {
+      console.error('Error refusing delivery:', err);
+    }
+  }, [session, fetchDeliveries]);
+
+  const handleSendMessage = useCallback((deliveryId: string | number, text: string) => {
+    console.log('Send message not implemented with backend yet', deliveryId, text);
+  }, []);
 
   const handleLogout = () => {
     setSession(null);
     setActiveTab(AppTab.HOME);
+    setDeliveries([]);
   };
 
   if (isLoading) {
@@ -116,14 +134,14 @@ const App: React.FC = () => {
   }
 
   const renderHomeContent = () => {
-    if (!session) return null;
+    if (!session || !profileInfo) return null;
     if (session.user.role === UserRole.RESTAURANT) {
       return (
         <RestaurantDashboard 
-          deliveries={deliveries.filter(d => d.restaurantId === session.user.id)} 
+          deliveries={deliveries}
           onAddDelivery={addDelivery} 
           userName={session.user.name}
-          currentUserId={session.user.id}
+          currentUserId={profileInfo.restaurant_id}
           onSendMessage={handleSendMessage}
         />
       );
@@ -131,9 +149,9 @@ const App: React.FC = () => {
     return (
       <CourierDashboard 
         allDeliveries={deliveries}
-        currentUserId={session.user.id}
-        onUpdateStatus={updateDeliveryStatus}
-        onRefuseDelivery={refuseDelivery}
+        currentUserId={profileInfo.courier_id}
+        onUpdateStatus={updateDeliveryStatus as any}
+        onRefuseDelivery={refuseDelivery as any}
         onSendMessage={handleSendMessage}
       />
     );
@@ -143,7 +161,7 @@ const App: React.FC = () => {
     if (!session) return <LandingPage onAuthSuccess={setSession} />;
     switch (activeTab) {
       case AppTab.HISTORY:
-        return <HistoryScreen role={session.user.role} deliveries={deliveries} currentUserId={session.user.id} />;
+        return <HistoryScreen role={session.user.role} deliveries={deliveries} currentUserId={profileInfo?.restaurant_id || profileInfo?.courier_id} />;
       case AppTab.PROFILE:
         return (
           <ProfileScreen 
@@ -151,8 +169,8 @@ const App: React.FC = () => {
             onLogout={handleLogout} 
             onUpdateUser={handleUpdateUser}
             stats={{
-              total: deliveries.filter(d => session.user.role === UserRole.RESTAURANT ? d.restaurantId === session.user.id : d.courierId === session.user.id).length,
-              delivered: deliveries.filter(d => (session.user.role === UserRole.RESTAURANT ? d.restaurantId === session.user.id : d.courierId === session.user.id) && d.status === DeliveryStatus.DELIVERED).length
+              total: deliveries.length,
+              delivered: deliveries.filter(d => d.status === DeliveryStatus.DELIVERED).length
             }}
           />
         );

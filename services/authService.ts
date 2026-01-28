@@ -1,58 +1,39 @@
 
 import { User, UserRole, AuthSession } from '../types';
-
-const USERS_DB_KEY = 'telego_users_db';
+import { apiService } from './api';
 
 export const authService = {
   register: async (name: string, email: string, password: string, role: UserRole): Promise<AuthSession> => {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '[]');
-    if (users.find((u: any) => u.email === email)) throw new Error('E-mail já cadastrado.');
-
-    const newUser: User = {
-      id: `user_${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      email,
-      role,
-      createdAt: Date.now()
+    const data = await apiService.post('/register', {
+      body: { name, email, password, role }
+    });
+    return {
+      user: data.user,
+      token: data.access_token
     };
-
-    users.push({ ...newUser, password });
-    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
-
-    return { user: newUser, token: `jwt-${newUser.id}` };
   },
 
   login: async (email: string, password: string): Promise<AuthSession> => {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '[]');
-    const userMatch = users.find((u: any) => u.email === email && u.password === password);
-    if (!userMatch) throw new Error('Credenciais inválidas.');
-    const { password: _, ...user } = userMatch;
-    return { user: user as User, token: `jwt-${user.id}` };
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+
+    const data = await apiService.post('/token', {
+      body: formData,
+      isFormData: true
+    });
+    return {
+      user: data.user,
+      token: data.access_token
+    };
   },
 
-  updateUser: async (userId: string, data: Partial<User>): Promise<User> => {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '[]');
-    const index = users.findIndex((u: any) => u.id === userId);
-    if (index === -1) throw new Error('Usuário não encontrado.');
-    
-    users[index] = { ...users[index], ...data };
-    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
-    const { password: _, ...user } = users[index];
-    return user as User;
+  updateUser: async (userId: string | number, data: Partial<User>): Promise<User> => {
+    console.warn('Update user not implemented in backend');
+    return data as User;
   },
 
-  changePassword: async (userId: string, currentPass: string, newPass: string): Promise<void> => {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const users = JSON.parse(localStorage.getItem(USERS_DB_KEY) || '[]');
-    const index = users.findIndex((u: any) => u.id === userId);
-    
-    if (index === -1) throw new Error('Usuário não encontrado.');
-    if (users[index].password !== currentPass) throw new Error('Senha atual incorreta.');
-    
-    users[index].password = newPass;
-    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+  changePassword: async (userId: string | number, currentPass: string, newPass: string): Promise<void> => {
+    console.warn('Change password not implemented in backend');
   }
 };

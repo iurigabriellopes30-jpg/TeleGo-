@@ -12,7 +12,7 @@ from backend.security import decode_access_token
 router = APIRouter(prefix="/orders", tags=["orders"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
-async def get_current_courier(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def get_current_user_email(token: str = Depends(oauth2_scheme)):
     payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         raise HTTPException(
@@ -20,7 +20,9 @@ async def get_current_courier(token: str = Depends(oauth2_scheme), db: AsyncSess
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    email: str = payload.get("sub")
+    return payload.get("sub")
+
+async def get_current_courier(email: str = Depends(get_current_user_email), db: AsyncSession = Depends(get_db)):
     stmt = select(models.Courier).where(models.Courier.email == email)
     result = await db.execute(stmt)
     courier = result.scalars().first()
@@ -49,6 +51,18 @@ async def get_available_orders(db: AsyncSession = Depends(get_db), current_couri
     orders = result.scalars().all()
     return orders
 
+@router.get("/restaurant/{restaurant_id}", response_model=List[schemas.Order])
+async def get_restaurant_orders(restaurant_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.Order).where(models.Order.restaurant_id == restaurant_id)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+@router.get("/courier/{courier_id}", response_model=List[schemas.Order])
+async def get_courier_orders(courier_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.Order).where(models.Order.courier_id == courier_id)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
 @router.post("/{order_id}/respond", response_model=schemas.Order)
 async def respond_to_order(
     order_id: int,
@@ -74,5 +88,17 @@ async def respond_to_order(
     if response_event := dispatch.courier_responses.get(order.id):
         response_event.set()
 
+    await db.refresh(order)
+    return order
+
+@router.put("/{order_id}/status", response_model=schemas.Order)
+async def update_order_status(order_id: int, status: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.Order).where(models.Order.id == order_id)
+    result = await db.execute(stmt)
+    order = result.scalars().first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    order.status = status
+    await db.commit()
     await db.refresh(order)
     return order
