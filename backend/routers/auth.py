@@ -1,6 +1,9 @@
 
 import logging
-from pydantic import EmailStr, ValidationError
+
+from backend.db import SessionLocal
+from backend import models
+from backend import schemas
 
 router = APIRouter(tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")

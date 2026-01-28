@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
-from models import models, schemas
-from db import get_db
+
+from backend.db import SessionLocal, get_db
+from backend import models
+from backend import schemas
 
 router = APIRouter(prefix="/couriers", tags=["couriers"])
 

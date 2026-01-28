@@ -1,5 +1,6 @@
 import asyncio
-from db import Base, engine
+
+from backend.db import Base, engine
 from backend import models
 
 async def init_db():

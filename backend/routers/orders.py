@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
 
-from models import models, schemas, dispatch
-from db import get_db
-from security import decode_access_token
+
+from backend import models
+from backend import schemas
+from backend.db import SessionLocal, get_db
+from backend.security import decode_access_token
+from backend import dispatch
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
