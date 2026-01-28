@@ -10,7 +10,12 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
+    echo=False,
+    connect_args=(
+        {"check_same_thread": False}
+        if SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+        else {"ssl": True}
+    )
 )
 
 SessionLocal = async_sessionmaker(
