@@ -16,7 +16,11 @@ app = FastAPI(title="TeleGo Backend", version="1.0.0", lifespan=lifespan)
 # Se allow_credentials for True, allow_origins não pode ser ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://telego-logistica-inteligente.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
