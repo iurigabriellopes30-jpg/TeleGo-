@@ -1,20 +1,22 @@
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from backend.db import Base, engine
 from backend.routers import auth, couriers, orders, restaurants
 
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
-app = FastAPI(title="TeleGo Backend", version="1.0.0")
-@app.get("/")
-def root():
-    return {"status": "ok", "service": "TeleGo Backend"}
-    
-# CORS para permitir acesso do frontend
+app = FastAPI(title="TeleGo Backend", version="1.0.0", lifespan=lifespan)
+
+# CORS configurado corretamente para permitir qualquer origem em desenvolvimento
+# Se allow_credentials for True, allow_origins não pode ser ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,5 +29,5 @@ app.include_router(orders.router)
 app.include_router(restaurants.router)
 
 @app.get("/")
-def root():
-    return {"message": "TeleGo API online"}
+async def root():
+    return {"status": "ok", "service": "TeleGo Backend", "message": "TeleGo API online"}

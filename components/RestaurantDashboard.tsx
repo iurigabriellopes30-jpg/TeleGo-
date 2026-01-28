@@ -17,8 +17,8 @@ interface RestaurantDashboardProps {
     observations?: string 
   }) => void;
   userName: string;
-  currentUserId: string;
-  onSendMessage: (deliveryId: string, text: string) => void;
+  currentUserId: string | number;
+  onSendMessage: (deliveryId: string | number, text: string) => void;
 }
 
 const CAXIAS_BOX = "-51.3500,-29.3500,-50.9500,-28.9500"; 
@@ -257,30 +257,33 @@ export const RestaurantDashboard: React.FC<RestaurantDashboardProps> = ({ delive
           <div key={delivery.id} className="bg-white p-7 rounded-[2.5rem] shadow-[0_20px_40px_rgba(0,0,0,0.03)] border border-slate-50 space-y-4 animate-fadeIn hover:border-[#8ecbff]/30 transition-colors">
              <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h4 className="font-[900] text-slate-900 text-lg leading-none mb-1">{delivery.customerName}</h4>
-                  <p className="text-[10px] text-slate-400 truncate w-40 font-bold">{delivery.deliveryAddress}</p>
+                  <h4 className="font-[900] text-slate-900 text-lg leading-none mb-1">{delivery.customerName || 'Pedido #' + delivery.id}</h4>
+                  <p className="text-[10px] text-slate-400 truncate w-40 font-bold">{delivery.deliveryAddress || 'Endereço não informado'}</p>
                 </div>
                 <div className="flex gap-3">
                   <div className="text-right">
                     <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">TELE</p>
-                    <p className="text-sm font-black text-[#8ecbff]">R$ {delivery.price.toFixed(2)}</p>
+                    <p className="text-sm font-black text-[#8ecbff]">R$ {(delivery.price || 0).toFixed(2)}</p>
                   </div>
                   <div className="text-right pl-3 border-l border-slate-100">
                     <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">PEDIDO</p>
-                    <p className="text-sm font-black text-slate-400">R$ {delivery.orderValue.toFixed(2)}</p>
+                    <p className="text-sm font-black text-slate-400">R$ {(delivery.orderValue || 0).toFixed(2)}</p>
                   </div>
                 </div>
              </div>
 
              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-[1.5rem]">
                <div className="flex items-center gap-3">
-                 <div className={`w-2.5 h-2.5 rounded-full ${delivery.status === DeliveryStatus.PENDING ? 'bg-amber-400 animate-pulse' : 'bg-[#8ecbff] shadow-[0_0_8px_#8ecbff]'}`}></div>
+                 <div className={`w-2.5 h-2.5 rounded-full ${delivery.status === 'SEARCHING' || delivery.status === DeliveryStatus.PENDING ? 'bg-amber-400 animate-pulse' : 'bg-[#8ecbff] shadow-[0_0_8px_#8ecbff]'}`}></div>
                  <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">
-                   {delivery.status === DeliveryStatus.PENDING ? 'Aguardando Motoboy' : 
-                    delivery.status === DeliveryStatus.ACCEPTED ? 'Motoboy aceitou' : 'Em trânsito'}
+                   {delivery.status === 'SEARCHING' || delivery.status === DeliveryStatus.PENDING ? 'Aguardando Motoboy' :
+                    delivery.status === 'ASSIGNED' || delivery.status === DeliveryStatus.ACCEPTED ? 'Motoboy aceitou' :
+                    delivery.status === 'PICKED_UP' ? 'Coletado' : 'Em trânsito'}
                  </p>
                </div>
-               <span className="text-[8px] font-black text-slate-300 uppercase">{new Date(delivery.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+               <span className="text-[8px] font-black text-slate-300 uppercase">
+                 {delivery.createdAt ? new Date(delivery.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+               </span>
              </div>
           </div>
         ))}

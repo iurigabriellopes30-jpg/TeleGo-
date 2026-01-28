@@ -6,7 +6,8 @@ export enum DeliveryStatus {
   IN_TRANSIT = 'IN_TRANSIT',
   DELIVERED = 'DELIVERED',
   CANCELLED = 'CANCELLED',
-  EXPIRED = 'EXPIRED'
+  EXPIRED = 'EXPIRED',
+  SEARCHING = 'SEARCHING' // Adicionado para bater com o backend
 }
 
 export enum UserRole {
@@ -23,19 +24,19 @@ export enum AppTab {
 
 export interface ChatMessage {
   id: string;
-  senderId: string;
+  senderId: string | number;
   senderName: string;
   text: string;
   timestamp: number;
 }
 
 export interface User {
-  id: string;
+  id: string | number;
   name: string;
   email: string;
   role: UserRole;
   avatar?: string;
-  createdAt: number;
+  createdAt?: number;
 }
 
 export interface AuthSession {
@@ -44,8 +45,8 @@ export interface AuthSession {
 }
 
 export interface Delivery {
-  id: string;
-  restaurantId: string;
+  id: string | number;
+  restaurantId: string | number;
   restaurantName: string;
   customerName: string;
   customerPhone?: string;
@@ -53,10 +54,10 @@ export interface Delivery {
   pickupCoords?: [number, number]; // [lat, lon]
   deliveryAddress: string;
   deliveryCoords?: [number, number]; // [lat, lon]
-  status: DeliveryStatus;
-  createdAt: number;
-  courierId?: string;
-  refusedBy?: string[];
+  status: DeliveryStatus | string;
+  createdAt: number | string;
+  courierId?: string | number;
+  refusedBy?: (string | number)[];
   price: number;
   orderValue: number;
   estimatedTime?: string;

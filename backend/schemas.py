@@ -1,22 +1,24 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 import datetime
 
-class UserCreate(BaseModel):
-    email: str
-    password: str
+class UserBase(BaseModel):
+    email: EmailStr
     name: str
+    role: str
 
-class UserOut(BaseModel):
+class UserCreate(UserBase):
+    password: str
+
+class UserOut(UserBase):
     id: int
-    email: str
-    name: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: UserOut
 
 class RestaurantBase(BaseModel):
     name: str
@@ -28,8 +30,9 @@ class RestaurantCreate(RestaurantBase):
 
 class Restaurant(RestaurantBase):
     id: int
+    user_id: Optional[int]
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CourierBase(BaseModel):
     name: str
@@ -38,12 +41,14 @@ class CourierBase(BaseModel):
     available: bool = True
 
 class CourierCreate(CourierBase):
+    email: EmailStr
     pass
 
 class Courier(CourierBase):
     id: int
+    user_id: Optional[int]
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class OrderBase(BaseModel):
     restaurant_id: int
@@ -60,4 +65,4 @@ class Order(OrderBase):
     attempt_count: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
