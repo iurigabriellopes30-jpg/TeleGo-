@@ -10,3 +10,4 @@ pytest-asyncio==0.23.7
 asyncpg
 aiosqlite
 python-multipart
+email-validator
