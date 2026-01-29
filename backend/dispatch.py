@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from geopy.distance import geodesic
-from . import models
-from .db import SessionLocal
+from backend import models
+from backend.db import SessionLocal
 
 # This is a simplified in-memory store for pending offers and events.
 # In a real-world application, you'd use a more robust solution like Redis.
