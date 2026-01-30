@@ -1,24 +1,54 @@
 import logging
-from typing import Union
+import os
+from datetime import datetime, timedelta
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import EmailStr, ValidationError
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from backend.db import get_db
 from backend import models
 from backend import schemas
-from backend.auth_utils import (
-    create_access_token,
-    decode_access_token,
-    verify_password,
-    get_password_hash
-)
 
 router = APIRouter(tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 logger = logging.getLogger("telego.auth")
+
+# Configurações JWT
+SECRET_KEY = os.getenv("SECRET_KEY", "sua-chave-secreta-aqui-alterar-em-producao")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Funções de autenticação
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def decode_access_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     payload = decode_access_token(token)
@@ -148,7 +178,14 @@ async def get_me(
     db: AsyncSession = Depends(get_db)
 ):
     # Retorna o usuário e o ID do restaurante/entregador associado
-    response = {"user": current_user}
+    response = {
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "role": current_user.role
+        }
+    }
     
     if current_user.role == "RESTAURANT":
         stmt = select(models.Restaurant).where(models.Restaurant.user_id == current_user.id)
