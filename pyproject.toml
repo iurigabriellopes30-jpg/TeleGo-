@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "telego"
+version = "0.1.0"
+description = ""
+authors = ["Seu Nome"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "*"
+uvicorn = "*"
+sqlalchemy = {extras = ["asyncio"], version = "*"}
+asyncpg = "*"
+greenlet = "*"
+pydantic = "*"
+email-validator = "*"
+python-jose = {extras = ["cryptography"], version = "*"}
+passlib = {extras = ["bcrypt"], version = "*"}
