@@ -20,6 +20,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:5173",
         "https://telego-production.up.railway.app"
+        "https://tele-go.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
