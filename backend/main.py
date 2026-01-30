@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from backend.db import Base, engine
-from backend.routers import auth, couriers, orders, restaurants
+from backend.routers import auth, couriers, orders, restaurants, websocket  # 🔥 ADICIONADO
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,6 +50,7 @@ app.include_router(auth.router)
 app.include_router(couriers.router)
 app.include_router(orders.router)
 app.include_router(restaurants.router)
+app.include_router(websocket.router)  # 🔥 ADICIONADO - WEBSOCKET
 
 @app.get("/")
 async def root():
