@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import EmailStr, ValidationError
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from backend.db import get_db
@@ -19,7 +18,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 logger = logging.getLogger("telego.auth")
 
 # Configurações JWT
-SECRET_KEY = os.getenv("SECRET_KEY", "sua-chave-secreta-aqui-alterar-em-producao")
+SECRET_KEY = os.getenv("SECRET_KEY", "telego-logistica-expressa-2026-chave-segura-32-chars")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -65,21 +64,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
 @router.post("/register", response_model=schemas.Token)
 async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     try:
-        # Validação do email
-        try:
-            EmailStr.validate(user_in.email)
-        except ValidationError:
-            logger.warning(f"Tentativa de registro com email inválido: {user_in.email}")
-            raise HTTPException(status_code=400, detail="Email inválido")
-
-        # Verifica se email já existe
+        # 1. Verifica se email já existe
         stmt = select(models.User).where(models.User.email == user_in.email)
         result = await db.execute(stmt)
         if result.scalars().first():
             logger.info(f"Tentativa de registro com email já cadastrado: {user_in.email}")
             raise HTTPException(status_code=409, detail="Email já cadastrado")
 
-        # Valida o role
+        # 2. Valida o role
         valid_roles = ["CUSTOMER", "RESTAURANT", "COURIER"]
         if user_in.role not in valid_roles:
             raise HTTPException(
@@ -87,7 +79,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_d
                 detail=f"Role inválido. Use: {', '.join(valid_roles)}"
             )
 
-        # Cria usuário
+        # 3. Cria usuário
         hashed_password = get_password_hash(user_in.password)
         new_user = models.User(
             email=user_in.email,
@@ -99,7 +91,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_d
         await db.commit()
         await db.refresh(new_user)
 
-        # Cria registro relacionado baseado no role
+        # 4. Cria registro relacionado baseado no role
         if new_user.role == "RESTAURANT":
             restaurant = models.Restaurant(
                 name=new_user.name, 
@@ -120,7 +112,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_d
 
         await db.commit()
 
-        # Gera token
+        # 5. Gera token
         access_token = create_access_token(data={"sub": new_user.email})
         logger.info(f"Usuário registrado com sucesso: {user_in.email} (role={user_in.role})")
         
