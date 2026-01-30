@@ -30,6 +30,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
+    # Bcrypt tem limite de 72 bytes
+    if len(password.encode('utf-8')) > 72:
+        # Trunca mantendo caracteres UTF-8 seguros
+        truncated = password.encode('utf-8')[:72]
+        password = truncated.decode('utf-8', 'ignore').rstrip('\x00')
+        logger.warning(f"Senha truncada para {len(password)} caracteres devido a limite do bcrypt")
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
