@@ -6,8 +6,7 @@ from backend.db import get_db
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
 # 🔥 ADICIONE ESTE ENDPOINT TEMPORÁRIO 🔥
-@router.patch("/{restaurant_id}/location")
-async def update_restaurant_location(
+@router.post("/{restaurant_id}/location")  # Mude para POSTasync def update_restaurant_location(
     restaurant_id: int,
     location_update: dict,  # {"lat": float, "lng": float}
     db: AsyncSession = Depends(get_db)
