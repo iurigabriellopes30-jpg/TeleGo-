@@ -2,13 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.db import get_db
+from backend import models
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
-# 🔥 ADICIONE ESTE ENDPOINT TEMPORÁRIO 🔥
-@router.post("/{restaurant_id}/location")  # Mude para POSTasync def update_restaurant_location(
+# 🔥 ENDPOINT TEMPORÁRIO PARA ATUALIZAR LOCALIZAÇÃO
+@router.post("/{restaurant_id}/location")
+async def update_restaurant_location(
     restaurant_id: int,
-    location_update: dict,  # {"lat": float, "lng": float}
+    location_update: dict,
     db: AsyncSession = Depends(get_db)
 ):
     """Endpoint temporário para atualizar localização do restaurante"""
@@ -27,4 +29,3 @@ router = APIRouter(prefix="/restaurants", tags=["restaurants"])
     await db.refresh(restaurant)
     
     return {"message": "Localização atualizada", "restaurant": restaurant}
-# 🔥 FIM DO ENDPOINT TEMPORÁRIO 🔥
