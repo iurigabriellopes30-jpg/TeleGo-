@@ -133,8 +133,9 @@ async def respond_to_order(
     await db.commit()
 
     # Sinaliza o loop de dispatch que uma resposta foi recebida
-    if order.id in dispatch.courier_responses:
-        dispatch.courier_responses[order.id].set()
+    from backend.dispatch import courier_responses
+    if order.id in courier_responses:
+        courier_responses[order.id].set()
 
     await db.refresh(order)
     return order
