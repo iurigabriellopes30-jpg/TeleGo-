@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, Delivery, DeliveryStatus, AppTab, User, AuthSession, ChatMessage } from './types';
 import { Layout } from './components/Layout';
 import { RestaurantDashboard } from './components/RestaurantDashboard';
@@ -111,7 +111,7 @@ const App: React.FC = () => {
         if (data.type === 'NEW_ORDER' || data.type === 'ORDER_UPDATE') {
           fetchDeliveries();
           // Som sonoro ou notificação visual poderia ser disparada aqui
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
              new Notification('TeleGo!', { body: data.message || 'Atualização no pedido' });
           }
         }
