@@ -156,14 +156,33 @@ const App: React.FC = () => {
     if (!session || !profileInfo?.restaurant_id) return;
     try {
       await apiService.post('/orders/', {
-        body: { restaurant_id: profileInfo.restaurant_id },
+        body: { 
+          restaurant_id: profileInfo.restaurant_id,
+          customer_name: newDelivery.customerName,
+          delivery_address: newDelivery.deliveryAddress,
+          pickup_address: newDelivery.pickupAddress,
+          price: newDelivery.price,
+          order_value: newDelivery.orderValue
+        },
         token: session.token
       });
       fetchDeliveries();
     } catch (err) {
-      console.error('Error adding delivery:', err);
+      console.error('Error creating delivery:', err);
     }
   }, [session, profileInfo, fetchDeliveries]);
+
+  const cancelDelivery = useCallback(async (orderId: string | number) => {
+    if (!session) return;
+    try {
+      await apiService.delete(`/orders/${orderId}`, {
+        token: session.token
+      });
+      fetchDeliveries();
+    } catch (err) {
+      console.error('Error cancelling delivery:', err);
+    }
+  }, [session, fetchDeliveries]);
 
   const updateDeliveryStatus = useCallback(async (id: string | number, status: string, courierId?: string | number) => {
     if (!session) return;
@@ -214,6 +233,7 @@ const App: React.FC = () => {
         <RestaurantDashboard 
           deliveries={deliveries}
           onAddDelivery={addDelivery} 
+          onCancelDelivery={cancelDelivery}
           userName={session.user.name}
           currentUserId={profileInfo.restaurant_id}
           onSendMessage={handleSendMessage}

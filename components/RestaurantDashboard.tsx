@@ -16,6 +16,7 @@ interface RestaurantDashboardProps {
     orderValue: number, 
     observations?: string 
   }) => void;
+  onCancelDelivery: (orderId: string | number) => void;
   userName: string;
   currentUserId: string | number;
   onSendMessage: (deliveryId: string | number, text: string) => void;
@@ -130,10 +131,14 @@ const AddressInput: React.FC<{
         </div>
       </div>
     </div>
-  );
-};
-
-export const RestaurantDashboard: React.FC<RestaurantDashboardProps> = ({ deliveries, onAddDelivery, userName, currentUserId, onSendMessage }) => {
+ export const RestaurantDashboard: React.FC<RestaurantDashboardProps> = ({ 
+  deliveries, 
+  onAddDelivery, 
+  onCancelDelivery,
+  userName, 
+  currentUserId,
+  onSendMessage
+}) => {
   const [customerName, setCustomerName] = useState('');
   const [pickupAddress, setPickupAddress] = useState('Sua Loja');
   const [pickupNumber, setPickupNumber] = useState('123');
@@ -254,11 +259,14 @@ export const RestaurantDashboard: React.FC<RestaurantDashboardProps> = ({ delive
       <div className="space-y-4">
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Entregas Ativas</h3>
         {deliveries.filter(d => d.status !== DeliveryStatus.DELIVERED && d.status !== DeliveryStatus.CANCELLED).map((delivery) => (
-          <div key={delivery.id} className="bg-white p-7 rounded-[2.5rem] shadow-[0_20px_40px_rgba(0,0,0,0.03)] border border-slate-50 space-y-4 animate-fadeIn hover:border-[#8ecbff]/30 transition-colors">
+          <div key={delivery.id} className="bg-white p-7 rounded-[2.5rem] shadow-[0_20px_40px_rgba(0,0,0,0.03)] border border-slate-50 space-y-5 animate-fadeIn hover:border-[#8ecbff]/30 transition-colors">
              <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h4 className="font-[900] text-slate-900 text-lg leading-none mb-1">{delivery.customerName || 'Pedido #' + delivery.id}</h4>
-                  <p className="text-[10px] text-slate-400 truncate w-40 font-bold">{delivery.deliveryAddress || 'Endereço não informado'}</p>
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <p className="text-[10px] truncate w-40 font-bold">{delivery.deliveryAddress || 'Endereço não informado'}</p>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <div className="text-right">
@@ -275,15 +283,39 @@ export const RestaurantDashboard: React.FC<RestaurantDashboardProps> = ({ delive
              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-[1.5rem]">
                <div className="flex items-center gap-3">
                  <div className={`w-2.5 h-2.5 rounded-full ${delivery.status === 'SEARCHING' || delivery.status === DeliveryStatus.PENDING ? 'bg-amber-400 animate-pulse' : 'bg-[#8ecbff] shadow-[0_0_8px_#8ecbff]'}`}></div>
-                 <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">
-                   {delivery.status === 'SEARCHING' || delivery.status === DeliveryStatus.PENDING ? 'Aguardando Motoboy' :
-                    delivery.status === 'ASSIGNED' || delivery.status === DeliveryStatus.ACCEPTED ? 'Motoboy aceitou' :
-                    delivery.status === 'PICKED_UP' ? 'Coletado' : 'Em trânsito'}
-                 </p>
+                 <div className="flex flex-col">
+                   <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest leading-tight">
+                     {delivery.status === 'SEARCHING' || delivery.status === DeliveryStatus.PENDING ? 'Aguardando Motoboy' :
+                      delivery.status === 'ASSIGNED' || delivery.status === DeliveryStatus.ACCEPTED ? 'Motoboy aceitou' :
+                      delivery.status === 'PICKED_UP' ? 'Coletado' : 'Em trânsito'}
+                   </p>
+                   {delivery.status === 'SEARCHING' && (
+                     <p className="text-[8px] font-bold text-amber-500 uppercase">
+                       Buscando há {Math.max(1, Math.floor((Date.now() - (delivery.createdAt ? new Date(delivery.createdAt).getTime() : Date.now())) / 60000))} min...
+                     </p>
+                   )}
+                 </div>
                </div>
-               <span className="text-[8px] font-black text-slate-300 uppercase">
-                 {delivery.createdAt ? new Date(delivery.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-               </span>
+               <div className="flex flex-col items-end">
+                 <span className="text-[8px] font-black text-slate-300 uppercase">
+                   {delivery.createdAt ? new Date(delivery.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                 </span>
+               </div>
+             </div>
+
+             <div className="flex gap-2">
+                <button 
+                  onClick={() => onCancelDelivery(delivery.id)}
+                  className="flex-1 py-3 bg-red-50 text-red-500 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  Cancelar Pedido
+                </button>
+                {delivery.status === 'ASSIGNED' && (
+                  <button className="flex-1 py-3 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors">
+                    Ver Chat
+                  </button>
+                )}
              </div>
           </div>
         ))}

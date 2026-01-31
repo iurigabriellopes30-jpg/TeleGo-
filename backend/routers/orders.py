@@ -35,7 +35,15 @@ async def get_current_courier(email: str = Depends(get_current_user_email), db: 
 
 @router.post("/", response_model=schemas.Order)
 async def create_order(order: schemas.OrderCreate, db: AsyncSession = Depends(get_db)):
-    new_order = models.Order(restaurant_id=order.restaurant_id, status="SEARCHING")
+    new_order = models.Order(
+        restaurant_id=order.restaurant_id,
+        customer_name=order.customer_name,
+        delivery_address=order.delivery_address,
+        pickup_address=order.pickup_address,
+        price=order.price,
+        order_value=order.order_value,
+        status="SEARCHING"
+    )
     db.add(new_order)
     await db.commit()
     await db.refresh(new_order)
@@ -57,21 +65,12 @@ async def get_available_orders(db: AsyncSession = Depends(get_db), current_couri
     result = await db.execute(stmt)
     orders = result.scalars().all()
     
-    # Adicionamos metadados necessários para o frontend
-    # Em uma app real, isso viria de um join ou estaria no modelo
     for order in orders:
-        if not hasattr(order, 'restaurantName'):
-            stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
-            res = await db.execute(stmt_res)
-            restaurant = res.scalars().first()
-            if restaurant:
-                order.restaurantName = restaurant.name
-                order.pickupAddress = f"{restaurant.name} (Loja)"
-                order.pickupCoords = [restaurant.lat, restaurant.lng]
-                order.deliveryAddress = "Endereço do Cliente"
-                order.deliveryCoords = [restaurant.lat - 0.005, restaurant.lng - 0.005]
-                order.price = 12.0
-                order.orderValue = 0.0
+        stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
+        res = await db.execute(stmt_res)
+        restaurant = res.scalars().first()
+        if restaurant:
+            order.restaurantName = restaurant.name
                 
     return orders
 
@@ -97,19 +96,12 @@ async def get_courier_orders(courier_id: int, db: AsyncSession = Depends(get_db)
     result = await db.execute(stmt)
     orders = result.scalars().all()
     
-    # Adicionamos metadados para o frontend
     for order in orders:
         stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
         res = await db.execute(stmt_res)
         restaurant = res.scalars().first()
         if restaurant:
             order.restaurantName = restaurant.name
-            order.pickupAddress = f"{restaurant.name} (Loja)"
-            order.pickupCoords = [restaurant.lat, restaurant.lng]
-            order.deliveryAddress = "Endereço do Cliente"
-            order.deliveryCoords = [restaurant.lat - 0.005, restaurant.lng - 0.005]
-            order.price = 12.0
-            order.orderValue = 0.0
             
     return orders
 
@@ -163,15 +155,34 @@ async def update_order_status(order_id: int, status: str, db: AsyncSession = Dep
     
     # Notifica restaurante e motoboy sobre a mudança de status
     try:
-        # Notifica restaurante
         await manager.notify_order_update(order.id, status, f"restaurant_{order.restaurant_id}")
-        
-        # Notifica motoboy se houver um atribuído
         if order.courier_id:
             await manager.notify_order_update(order.id, status, f"courier_{order.courier_id}")
-            
         print(f"✅ Notificação de status '{status}' enviada para o pedido {order.id}")
     except Exception as e:
         print(f"❌ Erro ao enviar notificação de status: {e}")
         
     return order
+
+@router.delete("/{order_id}")
+async def cancel_order(order_id: int, db: AsyncSession = Depends(get_db)):
+    from backend.websocket_manager import manager
+    
+    stmt = select(models.Order).where(models.Order.id == order_id)
+    result = await db.execute(stmt)
+    order = result.scalars().first()
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        
+    try:
+        await manager.notify_order_update(order.id, "CANCELLED", f"restaurant_{order.restaurant_id}")
+        if order.courier_id:
+            await manager.notify_order_update(order.id, "CANCELLED", f"courier_{order.courier_id}")
+    except:
+        pass
+
+    await db.delete(order)
+    await db.commit()
+    
+    return {"status": "success", "message": "Pedido cancelado"}

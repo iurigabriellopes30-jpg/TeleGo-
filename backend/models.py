@@ -35,6 +35,13 @@ class Order(Base):
     restaurant_id = Column(Integer, ForeignKey("restaurants.id"))
     courier_id = Column(Integer, ForeignKey("couriers.id"), nullable=True)
 
+    customer_name = Column(String, nullable=True)
+    delivery_address = Column(String, nullable=True)
+    pickup_address = Column(String, nullable=True)
+    price = Column(Float, default=0.0)
+    order_value = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
     status = Column(String, default="SEARCHING", index=True)
     current_candidate_courier_id = Column(Integer, ForeignKey("couriers.id"), nullable=True)
     offer_sent_at = Column(DateTime, nullable=True)
