@@ -52,6 +52,11 @@ class Courier(CourierBase):
 
 class OrderBase(BaseModel):
     restaurant_id: int
+    customer_name: Optional[str] = None
+    delivery_address: Optional[str] = None
+    pickup_address: Optional[str] = None
+    price: Optional[float] = 0.0
+    order_value: Optional[float] = 0.0
 
 class OrderCreate(OrderBase):
     pass
@@ -63,6 +68,7 @@ class Order(OrderBase):
     current_candidate_courier_id: Optional[int] = None
     offer_sent_at: Optional[datetime.datetime] = None
     attempt_count: int
+    created_at: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True

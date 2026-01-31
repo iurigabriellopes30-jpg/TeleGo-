@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, Delivery, DeliveryStatus, AppTab, User, AuthSession, ChatMessage } from './types';
 import { Layout } from './components/Layout';
 import { RestaurantDashboard } from './components/RestaurantDashboard';
@@ -28,16 +28,25 @@ const App: React.FC = () => {
   const fetchDeliveries = useCallback(async () => {
     if (!session || !profileInfo) return;
     try {
+      const mapBackendToFrontend = (order: any) => ({
+        ...order,
+        customerName: order.customer_name,
+        deliveryAddress: order.delivery_address,
+        pickupAddress: order.pickup_address,
+        orderValue: order.order_value,
+        createdAt: order.created_at
+      });
+
       if (session.user.role === UserRole.RESTAURANT && profileInfo.restaurant_id) {
         const data = await apiService.get(`/orders/restaurant/${profileInfo.restaurant_id}`, session.token);
-        setDeliveries(data);
+        setDeliveries(data.map(mapBackendToFrontend));
       } else if (session.user.role === UserRole.COURIER && profileInfo.courier_id) {
         const assigned = await apiService.get(`/orders/courier/${profileInfo.courier_id}`, session.token);
         const available = await apiService.get(`/orders/available`, session.token);
         // Evitar duplicatas se houver
-        const all = [...assigned];
+        const all = [...assigned.map(mapBackendToFrontend)];
         available.forEach((a: any) => {
-          if (!all.find(d => d.id === a.id)) all.push(a);
+          if (!all.find(d => d.id === a.id)) all.push(mapBackendToFrontend(a));
         });
         setDeliveries(all);
       }
@@ -46,12 +55,22 @@ const App: React.FC = () => {
     }
   }, [session, profileInfo]);
 
+  // WebSocket ref
+  const socketRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
     const savedSession = localStorage.getItem('telego_session');
     if (savedSession) {
-      const parsed = JSON.parse(savedSession);
-      setSession(parsed);
-      fetchProfile(parsed.token);
+      try {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.token) {
+          setSession(parsed);
+          fetchProfile(parsed.token);
+        }
+      } catch (e) {
+        console.error('Error parsing saved session', e);
+        localStorage.removeItem('telego_session');
+      }
     }
     setIsLoading(false);
   }, [fetchProfile]);
@@ -63,8 +82,72 @@ const App: React.FC = () => {
     } else {
       localStorage.removeItem('telego_session');
       setProfileInfo(null);
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
     }
   }, [session, profileInfo, fetchProfile]);
+
+  // WebSocket Connection Logic
+  useEffect(() => {
+    if (!session || !profileInfo) return;
+
+    const connectWebSocket = () => {
+      if (socketRef.current) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const host = apiUrl.replace(/^https?:\/\//, '');
+      
+      let wsUrl = '';
+      if (session.user.role === UserRole.RESTAURANT && profileInfo.restaurant_id) {
+        wsUrl = `${protocol}//${host}/ws/restaurant/${profileInfo.restaurant_id}`;
+      } else if (session.user.role === UserRole.COURIER && profileInfo.courier_id) {
+        wsUrl = `${protocol}//${host}/ws/courier/${profileInfo.courier_id}`;
+      }
+
+      if (!wsUrl) return;
+
+      console.log('Connecting to WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => console.log('✅ WebSocket Connected');
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('📩 WebSocket Message:', data);
+        
+        if (data.type === 'NEW_ORDER' || data.type === 'ORDER_UPDATE') {
+          fetchDeliveries();
+          // Som sonoro ou notificação visual poderia ser disparada aqui
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+             new Notification('TeleGo!', { body: data.message || 'Atualização no pedido' });
+          }
+        }
+      };
+      ws.onclose = () => {
+        console.log('❌ WebSocket Disconnected. Retrying...');
+        socketRef.current = null;
+        setTimeout(connectWebSocket, 3000);
+      };
+      ws.onerror = (err) => console.error('WebSocket Error:', err);
+
+      socketRef.current = ws;
+    };
+
+    connectWebSocket();
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [session, profileInfo, fetchDeliveries]);
 
   useEffect(() => {
     if (session && profileInfo) {
@@ -82,14 +165,33 @@ const App: React.FC = () => {
     if (!session || !profileInfo?.restaurant_id) return;
     try {
       await apiService.post('/orders/', {
-        body: { restaurant_id: profileInfo.restaurant_id },
+        body: { 
+          restaurant_id: profileInfo.restaurant_id,
+          customer_name: newDelivery.customerName,
+          delivery_address: newDelivery.deliveryAddress,
+          pickup_address: newDelivery.pickupAddress,
+          price: newDelivery.price,
+          order_value: newDelivery.orderValue
+        },
         token: session.token
       });
       fetchDeliveries();
     } catch (err) {
-      console.error('Error adding delivery:', err);
+      console.error('Error creating delivery:', err);
     }
   }, [session, profileInfo, fetchDeliveries]);
+
+  const cancelDelivery = useCallback(async (orderId: string | number) => {
+    if (!session) return;
+    try {
+      await apiService.delete(`/orders/${orderId}`, {
+        token: session.token
+      });
+      fetchDeliveries();
+    } catch (err) {
+      console.error('Error cancelling delivery:', err);
+    }
+  }, [session, fetchDeliveries]);
 
   const updateDeliveryStatus = useCallback(async (id: string | number, status: string, courierId?: string | number) => {
     if (!session) return;
@@ -140,6 +242,7 @@ const App: React.FC = () => {
         <RestaurantDashboard 
           deliveries={deliveries}
           onAddDelivery={addDelivery} 
+          onCancelDelivery={cancelDelivery}
           userName={session.user.name}
           currentUserId={profileInfo.restaurant_id}
           onSendMessage={handleSendMessage}

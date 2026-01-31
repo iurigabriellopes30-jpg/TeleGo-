@@ -36,14 +36,27 @@ async def dispatch_order(order_id: int, session_local=None):
     """
     use_session = session_local or SessionLocal
     async with use_session() as db:
-        stmt = select(models.Order).where(models.Order.id == order_id).options(selectinload(models.Order.restaurant))
+        # Carrega o pedido com o restaurante associado
+        stmt = select(models.Order).where(models.Order.id == order_id)
         result = await db.execute(stmt)
         order = result.scalars().first()
 
-        if not order or order.status != "SEARCHING":
+        if not order:
+            print(f"❌ Pedido {order_id} não encontrado")
+            return
+            
+        if order.status != "SEARCHING":
+            print(f"⚠️ Pedido {order_id} já está com status {order.status}")
             return
 
-        restaurant = order.restaurant
+        # Carrega o restaurante explicitamente para garantir que temos os dados
+        stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
+        result_res = await db.execute(stmt_res)
+        restaurant = result_res.scalars().first()
+        
+        if not restaurant:
+            print(f"❌ Restaurante {order.restaurant_id} não encontrado para o pedido {order_id}")
+            return
 
         # Fetch all couriers once
         all_couriers = await get_available_couriers(db)
@@ -65,22 +78,33 @@ async def dispatch_order(order_id: int, session_local=None):
                 order.offer_sent_at = datetime.datetime.now(datetime.UTC)
                 order.attempt_count += 1
                 await db.commit()
+                await db.refresh(order)
 
                 # 🔥🔥🔥 NOVO: NOTIFICAR VIA WEBSOCKET 🔥🔥🔥
                 try:
+                    # Preparamos os dados no formato que o frontend espera (Delivery interface)
+                    order_data = {
+                        "id": order.id,
+                        "restaurantId": restaurant.id,
+                        "restaurantName": restaurant.name,
+                        "customerName": order.customer_name or "Cliente TeleGo",
+                        "pickupAddress": order.pickup_address or f"{restaurant.name} (Loja)",
+                        "pickupCoords": [restaurant.lat, restaurant.lng],
+                        "deliveryAddress": order.delivery_address or "Endereço de Entrega",
+                        "deliveryCoords": [restaurant.lat - 0.005, restaurant.lng - 0.005],
+                        "price": order.price,
+                        "orderValue": order.order_value,
+                        "status": "SEARCHING",
+                        "createdAt": datetime.datetime.now().isoformat(),
+                        "attempt_count": order.attempt_count,
+                        "message": f"📦 Novo pedido de {restaurant.name}",
+                        "timeout_seconds": 20,
+                        "action_required": True
+                    }
+                    
                     websocket_notified = await manager.send_to_courier(
                         courier.id,
-                        {
-                            "order_id": order.id,
-                            "restaurant_id": restaurant.id,
-                            "restaurant_name": restaurant.name,
-                            "restaurant_lat": restaurant.lat,
-                            "restaurant_lng": restaurant.lng,
-                            "attempt_count": order.attempt_count,
-                            "message": f"📦 Novo pedido de {restaurant.name}",
-                            "timeout_seconds": 20,
-                            "requires_response": True
-                        }
+                        order_data
                     )
                     
                     if websocket_notified:

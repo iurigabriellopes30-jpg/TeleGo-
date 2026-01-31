@@ -124,7 +124,7 @@ async def register(user_in: schemas.UserCreate, db: AsyncSession = Depends(get_d
         
         return {
             "access_token": access_token, 
-            "token_type": "bearer", 
+            "token_type": "Bearer", 
             "user": {
                 "id": new_user.id,
                 "email": new_user.email,
@@ -161,7 +161,7 @@ async def login_for_access_token(
     access_token = create_access_token(data={"sub": user.email})
     return {
         "access_token": access_token, 
-        "token_type": "bearer", 
+        "token_type": "Bearer", 
         "user": {
             "id": user.id,
             "email": user.email,

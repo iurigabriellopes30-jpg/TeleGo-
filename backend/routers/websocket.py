@@ -33,10 +33,29 @@ async def courier_websocket_endpoint(websocket: WebSocket, courier_id: str):
                 pass
                 
             elif data.get("type") == "ORDER_RESPONSE":
-                # Resposta a um pedido (aceitar/recusar)
+                # Resposta a um pedido (aceitar/recusar) via WebSocket
                 order_id = data.get("order_id")
                 accepted = data.get("accepted")
-                print(f"📩 Motoboy {courier_id} respondeu pedido {order_id}: {'ACEITO' if accepted else 'RECUSADO'}")
+                print(f"📩 Motoboy {courier_id} respondeu pedido {order_id} via WS: {'ACEITO' if accepted else 'RECUSADO'}")
+                
+                # Importação local para evitar circular import
+                from backend.routers.orders import respond_to_order
+                from backend.db import SessionLocal
+                
+                async with SessionLocal() as db:
+                    # Buscamos o motoboy para passar para a função
+                    from sqlalchemy import select
+                    from backend import models
+                    stmt = select(models.Courier).where(models.Courier.id == int(courier_id))
+                    result = await db.execute(stmt)
+                    courier = result.scalars().first()
+                    
+                    if courier:
+                        try:
+                            await respond_to_order(order_id, accepted, db, courier)
+                            print(f"✅ Resposta do pedido {order_id} processada com sucesso")
+                        except Exception as e:
+                            print(f"❌ Erro ao processar respond_to_order via WS: {e}")
                 
     except WebSocketDisconnect:
         # Remove a conexão quando desconectar
