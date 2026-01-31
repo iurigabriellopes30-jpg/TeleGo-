@@ -28,16 +28,25 @@ const App: React.FC = () => {
   const fetchDeliveries = useCallback(async () => {
     if (!session || !profileInfo) return;
     try {
+      const mapBackendToFrontend = (order: any) => ({
+        ...order,
+        customerName: order.customer_name,
+        deliveryAddress: order.delivery_address,
+        pickupAddress: order.pickup_address,
+        orderValue: order.order_value,
+        createdAt: order.created_at
+      });
+
       if (session.user.role === UserRole.RESTAURANT && profileInfo.restaurant_id) {
         const data = await apiService.get(`/orders/restaurant/${profileInfo.restaurant_id}`, session.token);
-        setDeliveries(data);
+        setDeliveries(data.map(mapBackendToFrontend));
       } else if (session.user.role === UserRole.COURIER && profileInfo.courier_id) {
         const assigned = await apiService.get(`/orders/courier/${profileInfo.courier_id}`, session.token);
         const available = await apiService.get(`/orders/available`, session.token);
         // Evitar duplicatas se houver
-        const all = [...assigned];
+        const all = [...assigned.map(mapBackendToFrontend)];
         available.forEach((a: any) => {
-          if (!all.find(d => d.id === a.id)) all.push(a);
+          if (!all.find(d => d.id === a.id)) all.push(mapBackendToFrontend(a));
         });
         setDeliveries(all);
       }
