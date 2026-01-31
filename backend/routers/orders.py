@@ -46,25 +46,72 @@ async def create_order(order: schemas.OrderCreate, db: AsyncSession = Depends(ge
 
 @router.get("/available", response_model=List[schemas.Order])
 async def get_available_orders(db: AsyncSession = Depends(get_db), current_courier: models.Courier = Depends(get_current_courier)):
+    """
+    Retorna pedidos que estão aguardando resposta deste motoboy específico.
+    Isso serve como fallback caso o WebSocket falhe.
+    """
     stmt = select(models.Order).where(
         models.Order.status == "SEARCHING",
         models.Order.current_candidate_courier_id == current_courier.id
     )
     result = await db.execute(stmt)
     orders = result.scalars().all()
+    
+    # Adicionamos metadados necessários para o frontend
+    # Em uma app real, isso viria de um join ou estaria no modelo
+    for order in orders:
+        if not hasattr(order, 'restaurantName'):
+            stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
+            res = await db.execute(stmt_res)
+            restaurant = res.scalars().first()
+            if restaurant:
+                order.restaurantName = restaurant.name
+                order.pickupAddress = f"{restaurant.name} (Loja)"
+                order.pickupCoords = [restaurant.lat, restaurant.lng]
+                order.deliveryAddress = "Endereço do Cliente"
+                order.deliveryCoords = [restaurant.lat - 0.005, restaurant.lng - 0.005]
+                order.price = 12.0
+                order.orderValue = 0.0
+                
     return orders
 
 @router.get("/restaurant/{restaurant_id}", response_model=List[schemas.Order])
 async def get_restaurant_orders(restaurant_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(models.Order).where(models.Order.restaurant_id == restaurant_id)
     result = await db.execute(stmt)
-    return result.scalars().all()
+    orders = result.scalars().all()
+    
+    # Adicionamos metadados para o frontend
+    for order in orders:
+        order.restaurantName = "Seu Restaurante"
+        order.pickupAddress = "Endereço da Loja"
+        order.deliveryAddress = "Endereço do Cliente"
+        order.price = 12.0
+        order.orderValue = 0.0
+        
+    return orders
 
 @router.get("/courier/{courier_id}", response_model=List[schemas.Order])
 async def get_courier_orders(courier_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(models.Order).where(models.Order.courier_id == courier_id)
     result = await db.execute(stmt)
-    return result.scalars().all()
+    orders = result.scalars().all()
+    
+    # Adicionamos metadados para o frontend
+    for order in orders:
+        stmt_res = select(models.Restaurant).where(models.Restaurant.id == order.restaurant_id)
+        res = await db.execute(stmt_res)
+        restaurant = res.scalars().first()
+        if restaurant:
+            order.restaurantName = restaurant.name
+            order.pickupAddress = f"{restaurant.name} (Loja)"
+            order.pickupCoords = [restaurant.lat, restaurant.lng]
+            order.deliveryAddress = "Endereço do Cliente"
+            order.deliveryCoords = [restaurant.lat - 0.005, restaurant.lng - 0.005]
+            order.price = 12.0
+            order.orderValue = 0.0
+            
+    return orders
 
 @router.post("/{order_id}/respond", response_model=schemas.Order)
 async def respond_to_order(
@@ -77,31 +124,54 @@ async def respond_to_order(
     result = await db.execute(stmt)
     order = result.scalars().first()
 
-    if not order or order.current_candidate_courier_id != current_courier.id:
-        raise HTTPException(status_code=403, detail="Invalid order or not your turn")
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    if order.current_candidate_courier_id != current_courier.id:
+        raise HTTPException(status_code=403, detail="Não é a sua vez de responder a este pedido")
 
     if response:
         order.courier_id = current_courier.id
         order.status = "ASSIGNED"
+        print(f"✅ Pedido {order_id} ACEITO pelo motoboy {current_courier.id}")
     else:
         order.current_candidate_courier_id = None
+        print(f"❌ Pedido {order_id} RECUSADO pelo motoboy {current_courier.id}")
 
     await db.commit()
 
-    if response_event := dispatch.courier_responses.get(order.id):
-        response_event.set()
+    # Sinaliza o loop de dispatch que uma resposta foi recebida
+    if order.id in dispatch.courier_responses:
+        dispatch.courier_responses[order.id].set()
 
     await db.refresh(order)
     return order
 
 @router.put("/{order_id}/status", response_model=schemas.Order)
 async def update_order_status(order_id: int, status: str, db: AsyncSession = Depends(get_db)):
+    from backend.websocket_manager import manager
+    
     stmt = select(models.Order).where(models.Order.id == order_id)
     result = await db.execute(stmt)
     order = result.scalars().first()
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        
     order.status = status
     await db.commit()
     await db.refresh(order)
+    
+    # Notifica restaurante e motoboy sobre a mudança de status
+    try:
+        # Notifica restaurante
+        await manager.notify_order_update(order.id, status, f"restaurant_{order.restaurant_id}")
+        
+        # Notifica motoboy se houver um atribuído
+        if order.courier_id:
+            await manager.notify_order_update(order.id, status, f"courier_{order.courier_id}")
+            
+        print(f"✅ Notificação de status '{status}' enviada para o pedido {order.id}")
+    except Exception as e:
+        print(f"❌ Erro ao enviar notificação de status: {e}")
+        
     return order

@@ -44,7 +44,7 @@ class ConnectionManager:
         
         return False
     
-    async def notify_order_update(self, order_id: int, status: str, to_user_id: str = None):
+    async def notify_order_update(self, order_id: int, status: str, to_user_id: str = None, text: str = None):
         """
         Notifica atualização de status de um pedido
         """
@@ -52,7 +52,8 @@ class ConnectionManager:
             "type": "ORDER_UPDATE",
             "order_id": order_id,
             "status": status,
-            "timestamp": "agora"  # Poderia usar datetime
+            "message": text or f"Pedido {order_id} atualizado para {status}",
+            "timestamp": "agora"
         }
         
         if to_user_id:

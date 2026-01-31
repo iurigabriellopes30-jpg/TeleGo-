@@ -46,12 +46,22 @@ const App: React.FC = () => {
     }
   }, [session, profileInfo]);
 
+  // WebSocket ref
+  const socketRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
     const savedSession = localStorage.getItem('telego_session');
     if (savedSession) {
-      const parsed = JSON.parse(savedSession);
-      setSession(parsed);
-      fetchProfile(parsed.token);
+      try {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.token) {
+          setSession(parsed);
+          fetchProfile(parsed.token);
+        }
+      } catch (e) {
+        console.error('Error parsing saved session', e);
+        localStorage.removeItem('telego_session');
+      }
     }
     setIsLoading(false);
   }, [fetchProfile]);
@@ -63,8 +73,72 @@ const App: React.FC = () => {
     } else {
       localStorage.removeItem('telego_session');
       setProfileInfo(null);
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
     }
   }, [session, profileInfo, fetchProfile]);
+
+  // WebSocket Connection Logic
+  useEffect(() => {
+    if (!session || !profileInfo) return;
+
+    const connectWebSocket = () => {
+      if (socketRef.current) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const host = apiUrl.replace(/^https?:\/\//, '');
+      
+      let wsUrl = '';
+      if (session.user.role === UserRole.RESTAURANT && profileInfo.restaurant_id) {
+        wsUrl = `${protocol}//${host}/ws/restaurant/${profileInfo.restaurant_id}`;
+      } else if (session.user.role === UserRole.COURIER && profileInfo.courier_id) {
+        wsUrl = `${protocol}//${host}/ws/courier/${profileInfo.courier_id}`;
+      }
+
+      if (!wsUrl) return;
+
+      console.log('Connecting to WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => console.log('✅ WebSocket Connected');
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('📩 WebSocket Message:', data);
+        
+        if (data.type === 'NEW_ORDER' || data.type === 'ORDER_UPDATE') {
+          fetchDeliveries();
+          // Som sonoro ou notificação visual poderia ser disparada aqui
+          if (Notification.permission === 'granted') {
+             new Notification('TeleGo!', { body: data.message || 'Atualização no pedido' });
+          }
+        }
+      };
+      ws.onclose = () => {
+        console.log('❌ WebSocket Disconnected. Retrying...');
+        socketRef.current = null;
+        setTimeout(connectWebSocket, 3000);
+      };
+      ws.onerror = (err) => console.error('WebSocket Error:', err);
+
+      socketRef.current = ws;
+    };
+
+    connectWebSocket();
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+    };
+  }, [session, profileInfo, fetchDeliveries]);
 
   useEffect(() => {
     if (session && profileInfo) {
